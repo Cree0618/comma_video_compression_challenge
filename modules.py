@@ -1,16 +1,16 @@
 #!/usr/bin/env python
-import torch
-import timm
-import einops
+import torch, timm, einops
 import torch.nn as nn
 import segmentation_models_pytorch as smp
+from pathlib import Path
 from safetensors.torch import load_file
 from collections import namedtuple
 from frame_utils_dali import rgb_to_yuv6, affine_transform_image, camera_size, ecam_model_input_size, fcam_model_input_size, camera_intrinsics, ecam_model_intrinsics, fcam_model_intrinsics, segnet_model_input_size
 
 Head = namedtuple('Head', ['name', 'hidden', 'out'])
-segnet_sd_path = '/home/batman/xx/projects/comma2k19_compression/segnet.safetensors'
-posenet_sd_path = '/home/batman/xx/projects/comma2k19_compression/posenet.safetensors'
+HERE = Path(__file__).resolve().parent
+segnet_sd_path = HERE / 'models/segnet.safetensors'
+posenet_sd_path = HERE / 'models/posenet.safetensors'
 
 BN_EPS = 0.001
 BN_MOM = 0.01
@@ -148,7 +148,6 @@ class DistortionNet(nn.Module):
 
 if __name__ == "__main__":
   from frame_utils_dali import DaliHevcDataset, seq_len, camera_size
-  from pathlib import Path
   batch_size = 8
   device = torch.device('cuda', 0)
   files = ['b0c9d2329ad1606b|2018-07-29--11-17-20/7/video.hevc']
