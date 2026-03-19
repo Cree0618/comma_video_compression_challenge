@@ -18,7 +18,7 @@ score = 100 * segnet_distortion + sqrt(10 * posenet_distortion) + 25 * rate
 ```
 
 <p align="center">
-<img width="500" height="500" alt="image" src="https://github.com/user-attachments/assets/4dc4d758-230f-4af7-9d5a-06230c48c274" />
+<img width="500" height="500" alt="image" src="https://github.com/user-attachments/assets/4ba670ba-d823-4e16-a508-18fed000a525"/>
 </p>
 
 ## Quickstart
