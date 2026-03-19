@@ -87,7 +87,7 @@ External libraries and tools can be used and won't be counted towards the compre
 
 The dataset should not consume anything outside of `args.compressed_dir`.
 
-You can use anything for compression, including the models and the original uncompressed videos. Include your compression code if you wish to participate in the next stages of the challenge, but it won't be used in the first stage.
+You can use anything for compression, including the models and the original uncompressed videos. Include your compression code if you wish but it won't be used for evaluation.
 
 ```python
 
@@ -118,6 +118,6 @@ class DatasetClass(torch.utils.data.IterableDataset):
 
 ## going further
 
-The first stage of the challenge will only use the `public_test_video_names.txt` for evaluation. We will then run the top submissions on a private set of videos for a new evaluation round.
-
 You can use [test_videos.zip](https://huggingface.co/datasets/commaai/comma2k19/resolve/main/compression_challenge/test_videos.zip), which is a 2.4 GB archive of 64 driving videos from the comma2k19 dataset, to test your compression strategy on more samples.
+
+The evaluation script and the dataloader are designed to be scalable and can handle different batch sizes, sequence lengths, and video resolutions. You can modify them to fit your needs.
