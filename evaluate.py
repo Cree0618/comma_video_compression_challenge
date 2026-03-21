@@ -13,30 +13,32 @@ def main():
   parser.add_argument("--submission-dir", type=Path, default=Path('./submissions/baseline/'), help="compressed videos path")
   parser.add_argument("--uncompressed-dir", type=Path, default=Path('./test_videos/'), help="original uncompressed videos path")
   parser.add_argument("--seed", type=int, default=1234, help="RNG seed")
-  parser.add_argument("--device", type=str, default=None, help="device: 'cpu' or 'cuda' (default: auto-detect)")
+  parser.add_argument("--device", type=str, default=None, help="device: 'cpu', 'cuda', or 'mps' (default: auto-detect)")
   parser.add_argument("--report", type=Path, default=Path("./report.txt"), help="output report file path")
   parser.add_argument("--video-names-file", type=Path, default=Path("./public_test_video_names.txt"), help="text file with test video names (one per line)")
   args = parser.parse_args()
 
   if args.device is not None:
-    use_cuda = args.device != 'cpu'
+    device = torch.device(args.device)
+  elif torch.cuda.is_available():
+    device = torch.device("cuda", int(os.getenv("LOCAL_RANK", "0")))
+  elif torch.backends.mps.is_available():
+    device = torch.device("mps")
   else:
-    use_cuda = torch.cuda.is_available()
+    device = torch.device("cpu")
 
-  if use_cuda:
+  # distributed (cuda only)
+  if device.type == "cuda":
     local_rank = int(os.getenv("LOCAL_RANK", "0"))
     rank = int(os.getenv("RANK", "0"))
     world_size = int(os.getenv("WORLD_SIZE", "1"))
     is_distributed = world_size > 1
-    device = torch.device("cuda", local_rank)
+    if device.index is None:
+      device = torch.device("cuda", local_rank)
     torch.cuda.set_device(device)
     DefaultDatasetClass = DaliVideoDataset
   else:
-    local_rank = 0
-    rank = 0
-    world_size = 1
-    is_distributed = False
-    device = torch.device("cpu")
+    local_rank, rank, world_size, is_distributed = 0, 0, 1, False
     DefaultDatasetClass = AVVideoDataset
 
   if rank == 0:

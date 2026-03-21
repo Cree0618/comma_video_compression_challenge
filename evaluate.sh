@@ -17,7 +17,7 @@ while [[ $# -gt 0 ]]; do
       DEVICE="$2"; shift 2 ;;
     *)
       echo "Unknown arg: $1" >&2
-      echo "Usage: $0 [--submission-dir <dir>] [--video-names-file <file>] [--device <cpu|cuda>]" >&2
+      echo "Usage: $0 [--submission-dir <dir>] [--video-names-file <file>] [--device <cpu|cuda|mps>]" >&2
       exit 2 ;;
   esac
 done

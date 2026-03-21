@@ -185,7 +185,7 @@ def yuv420_to_rgb(frame) -> torch.Tensor:
 class AVVideoDataset(VideoDataset):
   def __init__(self, *args, **kwargs):
     super().__init__(*args, **kwargs)
-    assert self.device.type == 'cpu', f"AVVideoDataset only for cpu, got {self.device}"
+    assert self.device.type != 'cuda', f"AVVideoDataset not for cuda, use DaliVideoDataset instead"
 
   def __iter__(self):
     import av
@@ -254,11 +254,16 @@ class TensorVideoDataset(VideoDataset):
 
 if __name__ == "__main__":
   batch_size = 13
-  device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
+  if torch.cuda.is_available():
+    device = torch.device('cuda')
+  elif torch.backends.mps.is_available():
+    device = torch.device('mps')
+  else:
+    device = torch.device('cpu')
   files = (HERE / 'public_test_video_names.txt').read_text().splitlines()
   fmt = 'hevc'
   uncompressed_data_dir = Path('./test_videos/')
-  DsClaas = DaliVideoDataset if torch.cuda.is_available() else AVVideoDataset
+  DsClaas = DaliVideoDataset if device.type == 'cuda' else AVVideoDataset
   ds = DsClaas(files, data_dir=uncompressed_data_dir, batch_size=batch_size, device=device, format=fmt)
   ds.prepare_data()
   for i, (path, idx, batch) in enumerate(ds):

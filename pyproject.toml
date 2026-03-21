@@ -25,15 +25,20 @@ cpu = ["torch", "torchvision"]
 cu126 = ["torch", "torchvision", "nvidia-dali-cuda120"]
 cu128 = ["torch", "torchvision", "nvidia-dali-cuda120"]
 cu130 = ["torch", "torchvision", "nvidia-dali-cuda130"]
+mps = ["torch", "torchvision"]
 
 [tool.uv]
 conflicts = [
   [{ group = "cpu" }, { group = "cu126" }],
   [{ group = "cpu" }, { group = "cu128" }],
   [{ group = "cpu" }, { group = "cu130" }],
+  [{ group = "cpu" }, { group = "mps" }],
   [{ group = "cu126" }, { group = "cu128" }],
   [{ group = "cu126" }, { group = "cu130" }],
+  [{ group = "cu126" }, { group = "mps" }],
   [{ group = "cu128" }, { group = "cu130" }],
+  [{ group = "cu128" }, { group = "mps" }],
+  [{ group = "cu130" }, { group = "mps" }],
 ]
 
 [tool.uv.sources]

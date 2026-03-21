@@ -160,10 +160,15 @@ class DistortionNet(nn.Module):
 if __name__ == "__main__":
   from frame_utils import DaliVideoDataset, AVVideoDataset, seq_len, camera_size
   batch_size = 8
-  device = torch.device('cuda', 0) if torch.cuda.is_available() else torch.device('cpu')
+  if torch.cuda.is_available():
+    device = torch.device('cuda', 0)
+  elif torch.backends.mps.is_available():
+    device = torch.device('mps')
+  else:
+    device = torch.device('cpu')
   files = (HERE / 'public_test_video_names.txt').read_text().splitlines()
   uncompressed_data_dir = Path('./test_videos/')
-  DsClaas = DaliVideoDataset if torch.cuda.is_available() else AVVideoDataset
+  DsClaas = DaliVideoDataset if device.type == 'cuda' else AVVideoDataset
   ds = DsClaas(files, data_dir=uncompressed_data_dir, batch_size=batch_size, device=device)
   ds.prepare_data()
   segnet = SegNet().eval().to(device)
@@ -175,7 +180,7 @@ if __name__ == "__main__":
 
   for (_,_,batch) in ds:
     assert batch.shape == (batch_size, seq_len, camera_size[1], camera_size[0], 3), f"unexpected batch shape: {batch.shape}"
-    batch = einops.rearrange(batch, 'b t h w c -> b t c h w', b=batch_size, t=seq_len, c=3).float()
+    batch = einops.rearrange(batch, 'b t h w c -> b t c h w', b=batch_size, t=seq_len, c=3).float().to(device)
     segnet.debug_run(batch)
     posenet.debug_run(batch)
     break

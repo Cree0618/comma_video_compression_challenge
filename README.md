@@ -21,23 +21,24 @@ score = 100 * segnet_distortion + sqrt(10 * posenet_distortion) + 25 * rate
 <img width="500" height="500" alt="image" src="https://github.com/user-attachments/assets/e4421c23-8fbe-4293-b8de-9a77e6d568ab"/>
 </p>
 
-## Quickstart (Linux)
+## Quickstart
 ```
 # clone the repo
 git clone https://github.com/commaai/comma2k25_compression_challenge.git
 cd comma2k25_compression_challenge
 
+# install git-lfs and ffmpeg
+sudo apt-get update && sudo apt-get install -y git-lfs ffmpeg                        # Linux
+brew install git-lfs ffmpeg                                                          # macOS (with Homebrew)
+
 # git lfs
 git lfs install
 git lfs pull
 
-# install ffmpeg
-sudo apt-get update && sudo apt-get install -y ffmpeg
-
 # uv
 curl -LsSf https://astral.sh/uv/install.sh | sh
 
-# pick one: cu126/ cu128 / cu130 / cpu
+# pick one: cu126 / cu128 / cu130 / cpu / mps
 uv sync --group cu128
 
 # activate
@@ -57,7 +58,7 @@ cp submissions/baseline_fast/inflate.sh submissions/my_submission/
 # naively recompress (creates submissions/my_submission/archive.zip)
 bash submissions/my_submission/compress.sh
 
-# evaluate the submission
+# evaluate the submission (device: cuda / mps / cpu)
 bash evaluate.sh --submission-dir ./submissions/my_submission --device cuda
 ```
 
