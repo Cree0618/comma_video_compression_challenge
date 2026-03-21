@@ -96,6 +96,8 @@ Open a Pull Request with your submission and follow the template instructions to
 
 See [submissions/baseline/](submissions/baseline/) or [submissions/baseline_fast/](submissions/baseline_fast/) for working examples.
 
+Note that the evaluation has a time limit of 30 minutes. If your inflation script requires a GPU, it will run on a T4 GPU instance (RAM: 26GB, VRAM: 16GB), if it doesn't it will run on a CPU instance (CPU: 4, RAM: 16GB).
+
 ### evaluation
 
 ```bash
