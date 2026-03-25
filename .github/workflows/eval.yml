@@ -41,6 +41,7 @@ jobs:
       - id: check_name
         name: Check submission_name is unique (except for "baseline" for testing)
         run: |
+          git fetch origin master --depth=1
           if [ "${{ inputs.submission_name }}" != "baseline" ] && git ls-tree --name-only origin/master -- "submissions/${{ inputs.submission_name }}/" | grep -q .; then
             echo "::error::submission_name '${{ inputs.submission_name }}' already exists in master"
             exit 1
