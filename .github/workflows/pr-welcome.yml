@@ -7,7 +7,7 @@ on:
 
 jobs:
   welcome:
-    if: github.repository == 'commaai/commaH26x_compression_challenge'
+    if: github.repository == 'commaai/comma_video_compression_challenge'
     runs-on: ubuntu-latest
     permissions:
       pull-requests: write

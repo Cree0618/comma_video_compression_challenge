@@ -1,4 +1,4 @@
-# commaH26x_compression_challenge
+# comma Video compression challenge
 
  `./videos/0.mkv` is a 1 minute 35.8 MB dashcam video. Make it as small as possible while preserving semantic content and temporal dynamics.
 
@@ -19,7 +19,7 @@
 ## quickstart
 Clone the repo
 ```
-git clone https://github.com/commaai/commaH26x_compression_challenge.git && cd commaH26x_compression_challenge
+git clone https://github.com/commaai/comma_video_compression_challenge.git && cd comma_video_compression_challenge
 ```
 
 Install dependencies
@@ -64,8 +64,8 @@ If everything worked as expected, this should producce a `report.txt` file with 
   report: submissions/baseline_fast/report.txt
   seed: 1234
   submission_dir: submissions/baseline_fast
-  uncompressed_dir: /home/batman/commaH26x_compression_challenge/videos
-  video_names_file: /home/batman/commaH26x_compression_challenge/public_test_video_names.txt
+  uncompressed_dir: /home/batman/comma_video_compression_challenge/videos
+  video_names_file: /home/batman/comma_video_compression_challenge/public_test_video_names.txt
 === Evaluation results over 600 samples ===
   Average PoseNet Distortion: 0.38042614
   Average SegNet Distortion: 0.00946623
