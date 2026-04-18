@@ -119,8 +119,7 @@ def train():
     posenet = PoseNet().to(device).eval()
     posenet.load_state_dict(load_file(ROOT / 'models/posenet.safetensors', device=str(device)))
     
-    segnet = torch.compile(segnet, mode="reduce-overhead")
-    posenet = torch.compile(posenet, mode="reduce-overhead")
+
     
     print(f"Loading Full Dataset (1200 frames)...")
     ds = QuickDataset('submissions/mask2mask_improved/mask.mp4', ROOT / 'videos/0.mkv')
