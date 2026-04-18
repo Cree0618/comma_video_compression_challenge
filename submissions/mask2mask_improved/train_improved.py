@@ -98,7 +98,6 @@ class QuickDataset(torch.utils.data.Dataset):
 
 # --- Training ---
 def train():
-    # Device detection
     if torch.cuda.is_available():
         device = torch.device('cuda')
         device_name = torch.cuda.get_device_name(0)
@@ -120,10 +119,14 @@ def train():
     posenet = PoseNet().to(device).eval()
     posenet.load_state_dict(load_file(ROOT / 'models/posenet.safetensors', device=str(device)))
     
+    segnet = torch.compile(segnet, mode="reduce-overhead")
+    posenet = torch.compile(posenet, mode="reduce-overhead")
+    
     print(f"Loading Full Dataset (1200 frames)...")
     ds = QuickDataset('submissions/mask2mask_improved/mask.mp4', ROOT / 'videos/0.mkv')
-    dl = torch.utils.data.DataLoader(ds, batch_size=1, shuffle=True)
+    dl = torch.utils.data.DataLoader(ds, batch_size=2, shuffle=True, num_workers=2, pin_memory=True)
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
+    scaler = torch.amp.GradScaler('cuda')
 
     epochs = 50
     best_loss = float('inf')
@@ -136,61 +139,60 @@ def train():
         epoch_loss, epoch_rec, epoch_seg = 0, 0, 0
         
         for m, f in pbar:
-            m, f = m.to(device).long(), f.to(device).float() / 255.0
-            optimizer.zero_grad()
+            m = m.to(device, non_blocking=True).long()
+            f = f.to(device, non_blocking=True).float() / 255.0
+            optimizer.zero_grad(set_to_none=True)
             
-            pred, _ = model(m) # pred is (B, T, 3, 384, 512)
-            
-            # Instead of upsampling to full res (874x1164) which OOMs 4GB GPU,
-            # we downsample ground truth to match the generator's 384x512 resolution.
-            f_down = F.interpolate(
-                einops.rearrange(f, 'b t c h w -> (b t) c h w'),
-                size=(384, 512),
-                mode='bilinear',
-                align_corners=False
-            )
-            f_down = einops.rearrange(f_down, '(b t) c h w -> b t c h w', b=f.shape[0])
-            
-            loss_rec = F.l1_loss(pred, f_down)
-            
-            # Semantic Loss (SegNet)
-            # Both pred and f_down are now (B, T, 3, 384, 512)
-            seg_in_pred = segnet.preprocess_input(pred * 255.0)
-            with torch.no_grad():
-                seg_in_gt = segnet.preprocess_input(f_down * 255.0)
-                seg_out_gt = segnet(seg_in_gt)
-            seg_out_pred = segnet(seg_in_pred)
-            
-            loss_seg = F.kl_div(
-                F.log_softmax(seg_out_pred, dim=1), 
-                F.softmax(seg_out_gt, dim=1), 
-                reduction='batchmean'
-            )
-            
-            # Temporal Loss (PoseNet)
-            loss_pose = 0
-            for t in range(pred.shape[1] - 1):
-                pair_pred = pred[:, t:t+2]
-                pair_gt = f_down[:, t:t+2]
+            with torch.amp.autocast('cuda'):
+                pred, _ = model(m)
                 
-                posenet_in_pred = posenet.preprocess_input(pair_pred * 255.0)
+                f_down = F.interpolate(
+                    einops.rearrange(f, 'b t c h w -> (b t) c h w'),
+                    size=(384, 512),
+                    mode='bilinear',
+                    align_corners=False
+                )
+                f_down = einops.rearrange(f_down, '(b t) c h w -> b t c h w', b=f.shape[0])
+                
+                loss_rec = F.l1_loss(pred, f_down)
+                
+                seg_in_pred = segnet.preprocess_input(pred * 255.0)
                 with torch.no_grad():
-                    posenet_in_gt = posenet.preprocess_input(pair_gt * 255.0)
+                    seg_in_gt = segnet.preprocess_input(f_down * 255.0)
+                    seg_out_gt = segnet(seg_in_gt)
+                seg_out_pred = segnet(seg_in_pred)
+                
+                loss_seg = F.kl_div(
+                    F.log_softmax(seg_out_pred, dim=1), 
+                    F.softmax(seg_out_gt, dim=1), 
+                    reduction='batchmean'
+                )
+                
+                B, T = pred.shape[:2]
+                num_pairs = T - 1
+                
+                all_pred_pairs = einops.rearrange(torch.stack([pred[:, t:t+2] for t in range(num_pairs)], dim=0), 'n b t c h w -> (n b) t c h w')
+                all_gt_pairs = einops.rearrange(torch.stack([f_down[:, t:t+2] for t in range(num_pairs)], dim=0), 'n b t c h w -> (n b) t c h w')
+                
+                posenet_in_pred = posenet.preprocess_input(all_pred_pairs * 255.0)
+                with torch.no_grad():
+                    posenet_in_gt = posenet.preprocess_input(all_gt_pairs * 255.0)
                     posenet_out_gt = posenet(posenet_in_gt)
                 posenet_out_pred = posenet(posenet_in_pred)
                 
-                loss_pose += sum(
+                loss_pose = sum(
                     F.mse_loss(posenet_out_pred[h.name], posenet_out_gt[h.name])
                     for h in posenet.hydra.heads
                 )
-            loss_pose /= (pred.shape[1] - 1)
-            
-            loss = loss_rec + 0.1 * loss_seg + 0.01 * loss_pose
+                
+                loss = loss_rec + 0.1 * loss_seg + 0.01 * loss_pose
             
             if not torch.isnan(loss) and not torch.isinf(loss):
-                loss.backward()
+                scaler.scale(loss).backward()
+                scaler.unscale_(optimizer)
                 torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
-                optimizer.step()
+                scaler.step(optimizer)
+                scaler.update()
                 
                 epoch_loss += loss.item()
                 epoch_rec += loss_rec.item()
@@ -209,7 +211,6 @@ def train():
             
         print(f"{epoch:5d} | {avg_loss:8.4f} | {avg_rec:8.4f} | {avg_seg:8.4f}{status}")
         
-        # Cleanup memory after each epoch
         import gc
         gc.collect()
         if device.type == 'cuda':
