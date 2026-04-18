@@ -4,6 +4,7 @@ import numpy as np
 from pathlib import Path
 import sys
 from tqdm import tqdm
+from PIL import Image
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
@@ -40,10 +41,9 @@ def generate_masks(video_path, output_path, device):
             # 0->0, 1->63, 2->127, 3->191, 4->255
             mask_vis = (mask * 63).astype(np.uint8)
             
-            # Create a YUV frame for encoding
-            # We put the mask in the Y channel, and 128 in U,V (grayscale)
-            frame_out = av.VideoFrame(512, 384, 'gray8')
-            frame_out.planes[0].update(mask_vis.tobytes())
+            mask_resized = np.array(Image.fromarray(mask_vis).resize((256, 192), Image.NEAREST))
+            frame_out = av.VideoFrame(256, 192, 'gray8')
+            frame_out.planes[0].update(mask_resized.tobytes())
             
             for packet in out_stream.encode(frame_out):
                 output_container.mux(packet)
