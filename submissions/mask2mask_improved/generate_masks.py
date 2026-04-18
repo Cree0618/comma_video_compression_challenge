@@ -58,4 +58,7 @@ def generate_masks(video_path, output_path, device):
 
 if __name__ == "__main__":
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    generate_masks(ROOT / 'videos/0.mkv', 'submissions/mask2mask_improved/mask.mp4', device)
+    output_path = Path(__file__).parent / 'mask.mp4'
+    print(f"Saving mask to: {output_path}")
+    generate_masks(ROOT / 'videos/0.mkv', output_path, device)
+    print(f"Mask saved: {output_path} ({output_path.stat().st_size:,} bytes)")
