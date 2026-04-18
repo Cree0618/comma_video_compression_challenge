@@ -123,7 +123,7 @@ def train():
     
     print(f"Loading Full Dataset (1200 frames)...")
     ds = QuickDataset('submissions/mask2mask_improved/mask.mp4', ROOT / 'videos/0.mkv')
-    dl = torch.utils.data.DataLoader(ds, batch_size=2, shuffle=True, num_workers=2, pin_memory=True)
+    dl = torch.utils.data.DataLoader(ds, batch_size=8, shuffle=True, num_workers=2, pin_memory=True)
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
     scaler = torch.amp.GradScaler('cuda')
 
