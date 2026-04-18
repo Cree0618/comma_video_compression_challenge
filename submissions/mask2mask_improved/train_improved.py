@@ -152,7 +152,7 @@ def train():
                 
                 f_down = F.interpolate(
                     einops.rearrange(f, 'b t c h w -> (b t) c h w'),
-                    size=(384, 512),
+                    size=(192, 256),
                     mode='bilinear',
                     align_corners=False
                 )
