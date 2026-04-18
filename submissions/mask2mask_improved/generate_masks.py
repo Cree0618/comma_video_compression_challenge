@@ -13,6 +13,9 @@ from modules import SegNet
 from safetensors.torch import load_file
 
 def generate_masks(video_path, output_path, device):
+    output_path = Path(output_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    
     segnet = SegNet().to(device).eval()
     segnet.load_state_dict(load_file(ROOT / 'models/segnet.safetensors', device=str(device)))
     
@@ -25,7 +28,7 @@ def generate_masks(video_path, output_path, device):
     out_stream = output_container.add_stream('libx264', rate=20)
     out_stream.width = 256
     out_stream.height = 192
-    out_stream.pix_fmt = 'yuv420p'
+    out_stream.pix_fmt = 'gray8'
     out_stream.options = {'crf': '30', 'preset': 'veryslow'}
     
     with torch.no_grad():
