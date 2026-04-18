@@ -35,7 +35,7 @@ class ConvGRUCell(nn.Module):
         return next_h
 
 class TemporalGenerator(nn.Module):
-    def __init__(self, num_classes=5, features=64):
+    def __init__(self, num_classes=5, features=128):
         super().__init__()
         self.embedding = nn.Embedding(num_classes, features)
         self.enc = nn.Sequential(
@@ -66,16 +66,18 @@ class TemporalGenerator(nn.Module):
 def inflate(data_dir, output_dir, file_list_path):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     model = TemporalGenerator().to(device)
-    model.load_state_dict(torch.load(data_dir / 'model.pt', map_location=device))
+    sd = torch.load(data_dir / 'model.pt', map_location=device)
+    if any(v.dtype == torch.float16 for v in sd.values()):
+        sd = {k: v.float() for k, v in sd.items()}
+    model.load_state_dict(sd)
     model.eval()
 
     mask_path = data_dir / 'mask.mp4'
     container = av.open(str(mask_path))
     
-    # Load all masks
     all_masks = []
     for frame in container.decode(video=0):
-        img = np.frombuffer(frame.planes[0], np.uint8).reshape(384, 512)
+        img = np.frombuffer(frame.planes[0], np.uint8).reshape(192, 256)
         all_masks.append(torch.from_numpy(img.copy() // 63).to(torch.uint8))
     container.close()
     all_masks = torch.stack(all_masks).to(device)
@@ -85,32 +87,27 @@ def inflate(data_dir, output_dir, file_list_path):
     
     cursor = 0
     with torch.no_grad():
-        for file_name in files:
+        for file_name in tqdm(files, desc="Inflating videos"):
             base_name = os.path.splitext(file_name)[0]
             dst_path = Path(output_dir) / f"{base_name}.raw"
             
-            # 1200 frames per video for this challenge
             video_masks = all_masks[cursor : cursor + 1200]
             cursor += 1200
             
             with open(dst_path, 'wb') as f_out:
-                # Process in small sequences to maintain GRU state
                 h = None
-                batch_size = 1
                 seq_len = 10
                 for i in range(0, len(video_masks), seq_len):
                     batch_masks = video_masks[i : i + seq_len].unsqueeze(0).long()
                     pred, h = model(batch_masks, h)
                     
-                    # Upsample to full resolution
                     pred_up = F.interpolate(
                         einops.rearrange(pred, 'b t c h w -> (b t) c h w'),
                         size=(target_h, target_w),
-                        mode='bilinear',
+                        mode='bicubic',
                         align_corners=False
                     )
                     
-                    # Convert to uint8 RGB
                     output_bytes = (pred_up.clamp(0, 1) * 255.0).round().to(torch.uint8)
                     output_bytes = einops.rearrange(output_bytes, 'n c h w -> n h w c')
                     f_out.write(output_bytes.cpu().numpy().tobytes())

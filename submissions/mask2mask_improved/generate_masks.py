@@ -22,9 +22,10 @@ def generate_masks(video_path, output_path, device):
     output_container = av.open(str(output_path), mode='w')
     # Use a small resolution for the masks to save space
     out_stream = output_container.add_stream('libx264', rate=20)
-    out_stream.width = 512
-    out_stream.height = 384
+    out_stream.width = 256
+    out_stream.height = 192
     out_stream.pix_fmt = 'yuv420p'
+    out_stream.options = {'crf': '30', 'preset': 'veryslow'}
     
     with torch.no_grad():
         for frame in tqdm(container.decode(stream), total=1200):

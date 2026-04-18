@@ -36,7 +36,7 @@ class ConvGRUCell(nn.Module):
         return next_h
 
 class TemporalGenerator(nn.Module):
-    def __init__(self, num_classes=5, features=64):
+    def __init__(self, num_classes=5, features=128):
         super().__init__()
         self.embedding = nn.Embedding(num_classes, features)
         self.enc = nn.Sequential(
@@ -66,16 +66,16 @@ class TemporalGenerator(nn.Module):
 
 # --- Dataset ---
 class QuickDataset(torch.utils.data.Dataset):
-    def __init__(self, mask_path, video_path):
+    def __init__(self, mask_path, video_path, seq_len=8):
         self.masks = self.load_masks(mask_path)
         self.frames = self.load_frames(video_path)
-        self.seq_len = 4
+        self.seq_len = seq_len
 
     def load_masks(self, path):
         container = av.open(str(path))
         masks = []
         for frame in container.decode(video=0):
-            img = np.frombuffer(frame.planes[0], np.uint8).reshape(384, 512)
+            img = np.frombuffer(frame.planes[0], np.uint8).reshape(192, 256)
             masks.append(torch.from_numpy(img.copy() // 63).to(torch.uint8))
         container.close()
         return torch.stack(masks)
@@ -90,11 +90,10 @@ class QuickDataset(torch.utils.data.Dataset):
         return torch.stack(frames)
 
     def __len__(self):
-        return (len(self.masks) - self.seq_len) // self.seq_len
+        return len(self.masks) - self.seq_len
 
     def __getitem__(self, idx):
-        start = idx * self.seq_len
-        return self.masks[start:start+self.seq_len], self.frames[start:start+self.seq_len]
+        return self.masks[idx:idx+self.seq_len], self.frames[idx:idx+self.seq_len]
 
 # --- Training ---
 def train():
@@ -122,20 +121,26 @@ def train():
 
     
     print(f"Loading Full Dataset (1200 frames)...")
-    ds = QuickDataset('submissions/mask2mask_improved/mask.mp4', ROOT / 'videos/0.mkv')
-    dl = torch.utils.data.DataLoader(ds, batch_size=4, shuffle=True, num_workers=2, pin_memory=True)
+    ds = QuickDataset('submissions/mask2mask_improved/mask.mp4', ROOT / 'videos/0.mkv', seq_len=8)
+    dl = torch.utils.data.DataLoader(ds, batch_size=2, shuffle=True, num_workers=2, pin_memory=True)
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
     scaler = torch.amp.GradScaler('cuda')
 
     epochs = 50
     best_loss = float('inf')
+    ckpt_path = 'submissions/mask2mask_improved/model.pt'
+    if Path(ckpt_path).exists():
+        sd = torch.load(ckpt_path, map_location=device)
+        sd = {k: v.float() for k, v in sd.items()}
+        model.load_state_dict(sd)
+        print(f"Loaded checkpoint from {ckpt_path}")
     print(f"Starting Full Training ({epochs} epochs)...")
-    print(f"{'Epoch':>5} | {'Loss':>8} | {'Rec':>8} | {'Seg':>8}")
+    print(f"{'Epoch':>5} | {'Loss':>8} | {'Rec':>8} | {'Seg':>8} | {'Pose':>8}")
     print("-" * 40)
 
     for epoch in range(epochs):
         pbar = tqdm(dl, desc=f"Epoch {epoch}", leave=False)
-        epoch_loss, epoch_rec, epoch_seg = 0, 0, 0
+        epoch_loss, epoch_rec, epoch_seg, epoch_pose = 0, 0, 0, 0
         
         for m, f in pbar:
             m = m.to(device, non_blocking=True).long()
@@ -154,6 +159,8 @@ def train():
                 f_down = einops.rearrange(f_down, '(b t) c h w -> b t c h w', b=f.shape[0])
                 
                 loss_rec = F.l1_loss(pred, f_down)
+                
+                loss_diff = F.l1_loss(pred[:, 1:] - pred[:, :-1], f_down[:, 1:] - f_down[:, :-1])
                 
                 seg_in_pred = segnet.preprocess_input(pred * 255.0)
                 with torch.no_grad():
@@ -184,7 +191,7 @@ def train():
                     for h in posenet.hydra.heads
                 )
                 
-                loss = loss_rec + 0.1 * loss_seg + 0.01 * loss_pose
+                loss = loss_rec + 0.1 * loss_seg + 1.0 * loss_pose + 0.5 * loss_diff
             
             if not torch.isnan(loss) and not torch.isinf(loss):
                 scaler.scale(loss).backward()
@@ -196,19 +203,22 @@ def train():
                 epoch_loss += loss.item()
                 epoch_rec += loss_rec.item()
                 epoch_seg += loss_seg.item()
-                pbar.set_postfix(L=f"{loss.item():.3f}", R=f"{loss_rec.item():.3f}", S=f"{loss_seg.item():.3f}")
+                epoch_pose += loss_pose.item()
+                pbar.set_postfix(L=f"{loss.item():.3f}", R=f"{loss_rec.item():.3f}", P=f"{loss_pose.item():.3f}")
         
         avg_loss = epoch_loss / len(dl)
         avg_rec = epoch_rec / len(dl)
         avg_seg = epoch_seg / len(dl)
+        avg_pose = epoch_pose / len(dl)
         
         status = ""
         if avg_loss < best_loss:
             best_loss = avg_loss
-            torch.save(model.state_dict(), 'submissions/mask2mask_improved/model.pt')
+            sd = {k: v.half() for k, v in model.state_dict().items()}
+            torch.save(sd, 'submissions/mask2mask_improved/model.pt')
             status = " (Best)"
             
-        print(f"{epoch:5d} | {avg_loss:8.4f} | {avg_rec:8.4f} | {avg_seg:8.4f}{status}")
+        print(f"{epoch:5d} | {avg_loss:8.4f} | {avg_rec:8.4f} | {avg_seg:8.4f} | {avg_pose:8.4f}{status}")
         
         import gc
         gc.collect()
